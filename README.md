@@ -50,7 +50,7 @@ That's it. No extensions, no marketplace, no 180MB of features you'll never touc
 ## Quick Start
 
 ```bash
-git clone https://github.com/oselcuk2002/claude-studio.git
+git clone https://github.com/ozan2025/claude-studio.git
 cd claude-studio
 npm install
 npm run dev

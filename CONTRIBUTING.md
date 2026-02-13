@@ -13,7 +13,7 @@ Thanks for your interest in contributing! Claude Studio is a young project and c
 ### Dev Setup
 
 ```bash
-git clone https://github.com/oselcuk2002/claude-studio.git
+git clone https://github.com/ozan2025/claude-studio.git
 cd claude-studio
 npm install        # runs postinstall → patches SDK + installs Electron deps
 npm run dev        # launches Electron in dev mode with hot reload
