@@ -1,0 +1,11 @@
+#!/bin/bash
+# Launch Claude Studio with the specified directory (or current directory)
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export CLAUDE_STUDIO_PROJECT="${1:-.}"
+# Resolve to absolute path
+CLAUDE_STUDIO_PROJECT="$(cd "$CLAUDE_STUDIO_PROJECT" 2>/dev/null && pwd)" || {
+  echo "Error: directory '$1' not found"
+  exit 1
+}
+export CLAUDE_STUDIO_PROJECT
+cd "$SCRIPT_DIR" && npm run dev

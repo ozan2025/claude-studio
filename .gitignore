@@ -1,0 +1,11 @@
+node_modules
+out
+dist
+.DS_Store
+*.log
+.claude/
+test*.md
+.env*
+*.swp
+*.swo
+Thumbs.db
