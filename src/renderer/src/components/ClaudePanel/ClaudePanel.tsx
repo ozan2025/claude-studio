@@ -6,6 +6,8 @@ import {
   selectTotalCost,
   selectPendingPermission,
   selectPermissionMode,
+  selectContextWindowMax,
+  selectLastInputTokens,
 } from '@renderer/store/claudeCodeStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useSessionStore } from '@renderer/store/sessionStore'
@@ -54,6 +56,8 @@ export default function ClaudePanel() {
   const totalCostUsd = useClaudeCodeStore(selectTotalCost)
   const pendingPermission = useClaudeCodeStore(selectPendingPermission)
   const permissionMode = useClaudeCodeStore(selectPermissionMode)
+  const contextWindowMax = useClaudeCodeStore(selectContextWindowMax)
+  const lastInputTokens = useClaudeCodeStore(selectLastInputTokens)
   const rootPath = useFileTreeStore((s) => s.rootPath)
   const { sessionHistory } = useSessionStore()
 
@@ -445,6 +449,8 @@ export default function ClaudePanel() {
         partialToolJson: new Map(),
         permissionMode: 'default',
         totalCostUsd: 0,
+        contextWindowMax: 0,
+        lastInputTokens: 0,
         showPlanApproval: false,
         origin: 'external',
         pendingPermission: null,
@@ -566,6 +572,8 @@ export default function ClaudePanel() {
         model={model}
         totalCost={totalCostUsd}
         permissionMode={permissionMode}
+        contextWindowMax={contextWindowMax}
+        lastInputTokens={lastInputTokens}
       />
 
       <div ref={conversationRef} className="flex-1 flex flex-col min-h-0 relative">

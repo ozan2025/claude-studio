@@ -24,6 +24,8 @@ export interface SessionState {
   partialToolJson: Map<string, string>
   permissionMode: string
   totalCostUsd: number
+  contextWindowMax: number
+  lastInputTokens: number
   showPlanApproval: boolean
   origin: 'studio' | 'external'
   pendingPermission: {
@@ -47,6 +49,8 @@ function emptySessionState(): SessionState {
     partialToolJson: new Map(),
     permissionMode: 'default',
     totalCostUsd: 0,
+    contextWindowMax: 0,
+    lastInputTokens: 0,
     showPlanApproval: false,
     origin: 'studio',
     pendingPermission: null,
@@ -127,6 +131,8 @@ function flushSaveSession(sessionId: string): void {
     },
     conversation: session.messages,
     autoApprovalRules,
+    contextWindowMax: session.contextWindowMax,
+    lastInputTokens: session.lastInputTokens,
   }
 
   window.api.saveSessionData(persisted).catch((err: unknown) => {
@@ -207,6 +213,8 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
         partialToolJson: new Map(),
         permissionMode: 'default',
         totalCostUsd: persisted.info.costUsd,
+        contextWindowMax: persisted.contextWindowMax ?? 0,
+        lastInputTokens: persisted.lastInputTokens ?? 0,
         showPlanApproval: false,
         origin: persisted.info.origin ?? 'studio',
         pendingPermission: null,
@@ -595,6 +603,23 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
                 }
               : null
 
+          // Extract context window data from modelUsage + usage
+          let contextWindowMax: number | undefined
+          let lastInputTokens: number | undefined
+          if (event.modelUsage) {
+            const models = Object.values(event.modelUsage)
+            if (models.length > 0) {
+              contextWindowMax = models[0].contextWindow
+            }
+          }
+          if (event.usage) {
+            // Total context = non-cached + cache-read + cache-created tokens
+            lastInputTokens =
+              (event.usage.input_tokens ?? 0) +
+              (event.usage.cache_read_input_tokens ?? 0) +
+              (event.usage.cache_creation_input_tokens ?? 0)
+          }
+
           set(
             withSession(get(), sessionId, (s) => {
               const shouldShowPlanApproval = s.permissionMode === 'plan' && (isPlanExit || !isError)
@@ -602,6 +627,8 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
                 ...s,
                 status: shouldShowPlanApproval ? 'idle' : isError ? 'error' : 'idle',
                 totalCostUsd: event.total_cost_usd,
+                contextWindowMax: contextWindowMax ?? s.contextWindowMax,
+                lastInputTokens: lastInputTokens ?? s.lastInputTokens,
                 showPlanApproval: shouldShowPlanApproval,
                 messages: errMsg ? [...s.messages, errMsg] : s.messages,
               }
@@ -720,6 +747,12 @@ export const selectShowPlanApproval = (state: ClaudeCodeState): boolean =>
 
 export const selectClaudeSessionId = (state: ClaudeCodeState): string | null =>
   selectActiveSession(state)?.claudeSessionId ?? null
+
+export const selectContextWindowMax = (state: ClaudeCodeState): number =>
+  selectActiveSession(state)?.contextWindowMax ?? 0
+
+export const selectLastInputTokens = (state: ClaudeCodeState): number =>
+  selectActiveSession(state)?.lastInputTokens ?? 0
 
 /** Normalize SDK tool_result content to a plain string.
  *  The SDK V2 may send content as a string, an object {type, text}, or an array of them. */

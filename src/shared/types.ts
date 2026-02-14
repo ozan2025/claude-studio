@@ -165,6 +165,7 @@ export interface ClaudeResultEvent {
   session_id: string
   total_cost_usd: number
   usage: ClaudeUsage
+  modelUsage?: Record<string, ModelUsageInfo>
   permission_denials?: Array<{
     tool_name: string
     tool_use_id: string
@@ -178,6 +179,13 @@ export interface ClaudeUsage {
   output_tokens: number
   cache_creation_input_tokens?: number
   cache_read_input_tokens?: number
+}
+
+export interface ModelUsageInfo {
+  inputTokens: number
+  outputTokens: number
+  contextWindow: number
+  maxOutputTokens: number
 }
 
 // ═══════════════════════════════════════════
@@ -265,6 +273,8 @@ export interface PersistedSession {
   info: SessionInfo
   conversation: ConversationMessage[]
   autoApprovalRules: AutoApprovalRule[]
+  contextWindowMax?: number
+  lastInputTokens?: number
 }
 
 export interface SessionIndex {

@@ -33,8 +33,8 @@ export default function PermissionCardWrapper({
   }, [onRespond])
 
   const handleEditAcceptAll = useCallback(
-    (_autoApprove: boolean) => {
-      onRespond('yes')
+    (autoApprove: boolean) => {
+      onRespond(autoApprove ? 'allow_session' : 'yes')
     },
     [onRespond],
   )

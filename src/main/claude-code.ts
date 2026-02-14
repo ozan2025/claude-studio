@@ -867,6 +867,17 @@ class ClaudeCodeManager {
           input_tokens: 0,
           output_tokens: 0,
         },
+        modelUsage: sdkMsg.modelUsage as
+          | Record<
+              string,
+              {
+                inputTokens: number
+                outputTokens: number
+                contextWindow: number
+                maxOutputTokens: number
+              }
+            >
+          | undefined,
         permission_denials: sdkMsg.permission_denials as
           | Array<{
               tool_name: string

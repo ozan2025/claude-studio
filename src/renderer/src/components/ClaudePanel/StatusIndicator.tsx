@@ -5,6 +5,8 @@ interface StatusIndicatorProps {
   model: string | null
   totalCost: number
   permissionMode?: string
+  contextWindowMax?: number
+  lastInputTokens?: number
 }
 
 const STATUS_CONFIG: Record<ClaudeStatus, { label: string; color: string; pulse?: boolean }> = {
@@ -21,9 +23,23 @@ const MODE_LABELS: Record<string, string> = {
   plan: 'Plan',
 }
 
-export default function StatusIndicator({ status, model, permissionMode }: StatusIndicatorProps) {
+export default function StatusIndicator({
+  status,
+  model,
+  permissionMode,
+  contextWindowMax,
+  lastInputTokens,
+}: StatusIndicatorProps) {
   const config = STATUS_CONFIG[status]
   const modeLabel = permissionMode ? MODE_LABELS[permissionMode] : null
+
+  const showContext = (contextWindowMax ?? 0) > 0 && (lastInputTokens ?? 0) > 0
+  const contextPercentRaw = showContext ? (lastInputTokens! / contextWindowMax!) * 100 : 0
+  const contextPercent = Math.round(contextPercentRaw)
+  const contextLabel = showContext && contextPercent === 0 ? '<1%' : `${contextPercent}%`
+  const contextBarWidth = showContext ? Math.max(1, contextPercent) : 0
+  const contextColor =
+    contextPercent >= 80 ? 'bg-red-500' : contextPercent >= 60 ? 'bg-yellow-500' : 'bg-green-500'
 
   return (
     <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200 text-xs">
@@ -38,7 +54,27 @@ export default function StatusIndicator({ status, model, permissionMode }: Statu
           </span>
         )}
       </div>
-      <div className="flex items-center gap-3 text-gray-400">{model && <span>{model}</span>}</div>
+      <div className="flex items-center gap-3 text-gray-400">
+        {showContext && (
+          <div
+            className="flex items-center gap-1.5"
+            title={`Context: ${lastInputTokens!.toLocaleString()} / ${contextWindowMax!.toLocaleString()} tokens`}
+          >
+            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${contextColor} transition-all duration-300`}
+                style={{ width: `${Math.min(contextBarWidth, 100)}%` }}
+              />
+            </div>
+            <span
+              className={`text-[10px] ${contextPercent >= 80 ? 'text-red-500' : contextPercent >= 60 ? 'text-yellow-600' : 'text-gray-400'}`}
+            >
+              {contextLabel}
+            </span>
+          </div>
+        )}
+        {model && <span>{model}</span>}
+      </div>
     </div>
   )
 }
