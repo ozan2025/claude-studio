@@ -2,7 +2,8 @@ import { useEffect, useCallback, useRef } from 'react'
 import {
   useClaudeCodeStore,
   selectStatus,
-  selectPendingPermission,
+  selectPendingPermissions,
+  selectFirstPendingPermission,
   selectClaudeSessionId,
   selectPermissionMode,
   flushAllPendingSaves,
@@ -13,7 +14,8 @@ import { usePermissionStore } from '@renderer/store/permissionStore'
 export function useClaudeCode() {
   const activeSessionId = useClaudeCodeStore((s) => s.activeSessionId)
   const status = useClaudeCodeStore(selectStatus)
-  const pendingPermission = useClaudeCodeStore(selectPendingPermission)
+  const pendingPermissions = useClaudeCodeStore(selectPendingPermissions)
+  const firstPendingPermission = useClaudeCodeStore(selectFirstPendingPermission)
   const claudeSessionId = useClaudeCodeStore(selectClaudeSessionId)
   const permissionMode = useClaudeCodeStore(selectPermissionMode)
   const processStreamEvent = useClaudeCodeStore((s) => s.processStreamEvent)
@@ -171,48 +173,48 @@ export function useClaudeCode() {
     [activeSessionId, addUserMessage],
   )
 
-  // Accept a pending permission — send to main process
-  const acceptPermission = useCallback(async () => {
-    if (!activeSessionId || !pendingPermission) return
-    resolvePermission(activeSessionId, pendingPermission.toolUseId, true)
-    await window.api.respondToPermission(pendingPermission.toolUseId, true)
-  }, [activeSessionId, pendingPermission, resolvePermission])
+  // Accept a specific pending permission — send to main process
+  const acceptPermission = useCallback(
+    async (toolUseId: string) => {
+      if (!activeSessionId) return
+      resolvePermission(activeSessionId, toolUseId, true)
+      await window.api.respondToPermission(toolUseId, true)
+    },
+    [activeSessionId, resolvePermission],
+  )
 
   // Accept with custom updatedInput (e.g. AskUserQuestion answers)
   const acceptPermissionWithInput = useCallback(
-    async (updatedInput: Record<string, unknown>) => {
-      if (!activeSessionId || !pendingPermission) return
-      resolvePermission(activeSessionId, pendingPermission.toolUseId, true)
-      await window.api.respondToPermission(
-        pendingPermission.toolUseId,
-        true,
-        undefined,
-        updatedInput,
-      )
+    async (toolUseId: string, updatedInput: Record<string, unknown>) => {
+      if (!activeSessionId) return
+      resolvePermission(activeSessionId, toolUseId, true)
+      await window.api.respondToPermission(toolUseId, true, undefined, updatedInput)
     },
-    [activeSessionId, pendingPermission, resolvePermission],
+    [activeSessionId, resolvePermission],
   )
 
-  // Reject a pending permission — SDK handles denial in-session,
-  // Claude sees the denial and adjusts. No need to track separately.
-  const rejectPermission = useCallback(async () => {
-    if (!activeSessionId || !pendingPermission) return
-    resolvePermission(activeSessionId, pendingPermission.toolUseId, false)
-    await window.api.respondToPermission(pendingPermission.toolUseId, false)
-  }, [activeSessionId, pendingPermission, resolvePermission])
+  // Reject a specific pending permission
+  const rejectPermission = useCallback(
+    async (toolUseId: string) => {
+      if (!activeSessionId) return
+      resolvePermission(activeSessionId, toolUseId, false)
+      await window.api.respondToPermission(toolUseId, false)
+    },
+    [activeSessionId, resolvePermission],
+  )
 
   // "Always allow [tool] for this session" — approve + set auto-approval rule
   const allowToolForSession = useCallback(
-    async (toolName: string) => {
-      if (!activeSessionId || !pendingPermission) return
+    async (toolUseId: string, toolName: string) => {
+      if (!activeSessionId) return
 
       // Set auto-approval rule for future requests
       usePermissionStore.getState().enableAutoApproval(activeSessionId, toolName)
 
       // Approve the current request with updatedPermissions to tell SDK
-      resolvePermission(activeSessionId, pendingPermission.toolUseId, true)
+      resolvePermission(activeSessionId, toolUseId, true)
       await window.api.respondToPermission(
-        pendingPermission.toolUseId,
+        toolUseId,
         true,
         // Tell the SDK to add a session-level allow rule for this tool
         [
@@ -225,7 +227,7 @@ export function useClaudeCode() {
         ],
       )
     },
-    [activeSessionId, pendingPermission, resolvePermission],
+    [activeSessionId, resolvePermission],
   )
 
   const interrupt = useCallback(async () => {
@@ -316,7 +318,8 @@ export function useClaudeCode() {
     claudeSessionId,
     status,
     permissionMode,
-    pendingPermission,
+    pendingPermissions,
+    firstPendingPermission,
     spawnSession,
     sendMessage,
     acceptPermission,

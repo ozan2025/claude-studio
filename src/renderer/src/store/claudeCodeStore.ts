@@ -12,6 +12,15 @@ import type {
 import { usePermissionStore } from './permissionStore'
 import { useFileTreeStore } from './fileTreeStore'
 
+// Pending permission entry (one per concurrent SDK canUseTool call)
+export interface PendingPermission {
+  toolUseId: string
+  toolName: string
+  input: Record<string, unknown>
+  suggestions?: PermissionRequestEvent['suggestions']
+  reason?: string
+}
+
 // Per-session state
 export interface SessionState {
   claudeSessionId: string | null
@@ -28,13 +37,7 @@ export interface SessionState {
   lastInputTokens: number
   showPlanApproval: boolean
   origin: 'studio' | 'external'
-  pendingPermission: {
-    toolUseId: string
-    toolName: string
-    input: Record<string, unknown>
-    suggestions?: PermissionRequestEvent['suggestions']
-    reason?: string
-  } | null
+  pendingPermissions: PendingPermission[]
 }
 
 function emptySessionState(): SessionState {
@@ -53,7 +56,7 @@ function emptySessionState(): SessionState {
     lastInputTokens: 0,
     showPlanApproval: false,
     origin: 'studio',
-    pendingPermission: null,
+    pendingPermissions: [],
   }
 }
 
@@ -217,7 +220,7 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
         lastInputTokens: persisted.lastInputTokens ?? 0,
         showPlanApproval: false,
         origin: persisted.info.origin ?? 'studio',
-        pendingPermission: null,
+        pendingPermissions: [],
       }
       next.set(sessionId, restored)
       return {
@@ -252,18 +255,20 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
           status: 'pending',
         }
 
+        const newPerm: PendingPermission = {
+          toolUseId: event.toolUseId,
+          toolName: event.toolName,
+          input: event.input,
+          suggestions: event.suggestions,
+          reason: event.reason,
+        }
+
         // If there's a streaming message, add the block there
         if (s.currentStreamingMessageId) {
           return {
             ...s,
             status: 'waiting_for_user',
-            pendingPermission: {
-              toolUseId: event.toolUseId,
-              toolName: event.toolName,
-              input: event.input,
-              suggestions: event.suggestions,
-              reason: event.reason,
-            },
+            pendingPermissions: [...s.pendingPermissions, newPerm],
             messages: s.messages.map((m) =>
               m.id === s.currentStreamingMessageId
                 ? { ...m, contentBlocks: [...m.contentBlocks, permBlock] }
@@ -283,36 +288,35 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
         return {
           ...s,
           status: 'waiting_for_user',
-          pendingPermission: {
-            toolUseId: event.toolUseId,
-            toolName: event.toolName,
-            input: event.input,
-            suggestions: event.suggestions,
-            reason: event.reason,
-          },
+          pendingPermissions: [...s.pendingPermissions, newPerm],
           messages: [...s.messages, msg],
         }
       }),
     )
   },
 
-  // Resolve a pending permission — update block status + clear pending
+  // Resolve a pending permission — update block status + remove from queue
   resolvePermission: (sessionId, toolUseId, accepted) => {
     set(
-      withSession(get(), sessionId, (s) => ({
-        ...s,
-        pendingPermission: null,
-        status: accepted ? 'tool_executing' : 'thinking',
-        messages: s.messages.map((m) => ({
-          ...m,
-          contentBlocks: m.contentBlocks.map((b) => {
-            if (b.type === 'permission_request' && b.toolUseId === toolUseId) {
-              return { ...b, status: accepted ? ('accepted' as const) : ('rejected' as const) }
-            }
-            return b
-          }),
-        })),
-      })),
+      withSession(get(), sessionId, (s) => {
+        const remaining = s.pendingPermissions.filter((p) => p.toolUseId !== toolUseId)
+        return {
+          ...s,
+          pendingPermissions: remaining,
+          // Only change status if no more permissions pending
+          status:
+            remaining.length > 0 ? 'waiting_for_user' : accepted ? 'tool_executing' : 'thinking',
+          messages: s.messages.map((m) => ({
+            ...m,
+            contentBlocks: m.contentBlocks.map((b) => {
+              if (b.type === 'permission_request' && b.toolUseId === toolUseId) {
+                return { ...b, status: accepted ? ('accepted' as const) : ('rejected' as const) }
+              }
+              return b
+            }),
+          })),
+        }
+      }),
     )
   },
 
@@ -547,9 +551,10 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
               return {
                 ...s,
                 messages,
-                lastInputTokens: assistantInputTokens > 0 ? assistantInputTokens : s.lastInputTokens,
+                lastInputTokens:
+                  assistantInputTokens > 0 ? assistantInputTokens : s.lastInputTokens,
                 currentStreamingMessageId: null,
-                pendingPermission: null,
+                pendingPermissions: [],
                 status: 'thinking',
               }
             }),
@@ -578,7 +583,7 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
                         return b
                       }),
                     })),
-                    pendingPermission: null,
+                    pendingPermissions: [],
                     status: 'tool_executing',
                   })),
                 )
@@ -735,8 +740,14 @@ export const selectStatus = (state: ClaudeCodeState): ClaudeStatus =>
 export const selectModel = (state: ClaudeCodeState): string | null =>
   selectActiveSession(state)?.model ?? null
 
-export const selectPendingPermission = (state: ClaudeCodeState) =>
-  selectActiveSession(state)?.pendingPermission ?? null
+const EMPTY_PERMISSIONS: PendingPermission[] = []
+
+export const selectPendingPermissions = (state: ClaudeCodeState): PendingPermission[] =>
+  selectActiveSession(state)?.pendingPermissions ?? EMPTY_PERMISSIONS
+
+/** First pending permission — for keyboard shortcuts and sticky prompt bar */
+export const selectFirstPendingPermission = (state: ClaudeCodeState): PendingPermission | null =>
+  selectActiveSession(state)?.pendingPermissions[0] ?? null
 
 export const selectPermissionMode = (state: ClaudeCodeState): string =>
   selectActiveSession(state)?.permissionMode ?? 'default'

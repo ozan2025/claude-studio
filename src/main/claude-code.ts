@@ -833,6 +833,22 @@ class ClaudeCodeManager {
       }
       this.emitEvent(sessionId, event)
     } else if (type === 'assistant') {
+      // Detect EnterPlanMode from assistant tool_use blocks (safety net —
+      // SDK may auto-approve without calling canUseTool)
+      const assistantMsg = sdkMsg.message as { content?: Array<{ type: string; name?: string }> }
+      if (assistantMsg?.content?.some((b) => b.type === 'tool_use' && b.name === 'EnterPlanMode')) {
+        if (entry.permissionMode !== 'plan') {
+          console.log(`[claude-code] detected EnterPlanMode in assistant event, switching to plan`)
+          entry.permissionMode = 'plan'
+          if (this.win && !this.win.isDestroyed()) {
+            this.win.webContents.send(IPC.CLAUDE_MODE_CHANGED, {
+              sessionId,
+              permissionMode: 'plan',
+            })
+          }
+        }
+      }
+
       const event: ClaudeStreamEvent = {
         type: 'assistant',
         message: sdkMsg.message as ClaudeStreamEvent extends { type: 'assistant' }

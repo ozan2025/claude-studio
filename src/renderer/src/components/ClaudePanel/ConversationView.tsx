@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import {
   useClaudeCodeStore,
   selectMessages,
-  selectPendingPermission,
+  selectPendingPermissions,
   selectShowPlanApproval,
 } from '@renderer/store/claudeCodeStore'
 import { useErrorStore } from '@renderer/store/errorStore'
@@ -13,10 +13,10 @@ import PlanApprovalCard from '../Permissions/PlanApprovalCard'
 import { useIntersectionVisible } from '../Permissions/StickyPromptBar'
 
 interface ConversationViewProps {
-  onAcceptPermission: () => void
-  onAcceptPermissionWithInput?: (updatedInput: Record<string, unknown>) => void
-  onRejectPermission: () => void
-  onAllowToolForSession: () => void
+  onAcceptPermission: (toolUseId: string) => void
+  onAcceptPermissionWithInput?: (toolUseId: string, updatedInput: Record<string, unknown>) => void
+  onRejectPermission: (toolUseId: string) => void
+  onAllowToolForSession: (toolUseId: string, toolName: string) => void
   onPermissionVisibilityChange?: (visible: boolean) => void
   onRestartSession?: () => void
   onExecutePlanAutoAccept?: () => void
@@ -40,7 +40,7 @@ export default function ConversationView({
   sessionId,
 }: ConversationViewProps) {
   const messages = useClaudeCodeStore(selectMessages)
-  const pendingPermission = useClaudeCodeStore(selectPendingPermission)
+  const pendingPermissions = useClaudeCodeStore(selectPendingPermissions)
   const showPlanApproval = useClaudeCodeStore(selectShowPlanApproval)
   const allErrors = useErrorStore((s) => s.errors)
   const dismissError = useErrorStore((s) => s.dismissError)
@@ -57,8 +57,8 @@ export default function ConversationView({
 
   // Notify parent about permission card visibility
   useEffect(() => {
-    onPermissionVisibilityChange?.(isPermissionVisible || !pendingPermission)
-  }, [isPermissionVisible, pendingPermission, onPermissionVisibilityChange])
+    onPermissionVisibilityChange?.(isPermissionVisible || pendingPermissions.length === 0)
+  }, [isPermissionVisible, pendingPermissions, onPermissionVisibilityChange])
 
   // Auto-scroll to bottom on new content
   useLayoutEffect(() => {
@@ -78,34 +78,37 @@ export default function ConversationView({
     isAutoScrolling.current = scrollHeight - scrollTop - clientHeight < 100
   }, [])
 
-  const handleRespond = useCallback(
-    (response: string) => {
-      if (!sessionId) return
+  const makeHandleRespond = useCallback(
+    (perm: { toolUseId: string; toolName: string; input: Record<string, unknown> }) =>
+      (response: string) => {
+        if (!sessionId) return
 
-      // AskUserQuestion: response is JSON with answers — inject into updatedInput
-      if (response.startsWith('{"__askUserAnswers"')) {
-        try {
-          const parsed = JSON.parse(response) as { answers: Record<string, string> }
-          if (onAcceptPermissionWithInput && pendingPermission) {
-            onAcceptPermissionWithInput({ ...pendingPermission.input, answers: parsed.answers })
-            return
+        // AskUserQuestion: response is JSON with answers — inject into updatedInput
+        if (response.startsWith('{"__askUserAnswers"')) {
+          try {
+            const parsed = JSON.parse(response) as { answers: Record<string, string> }
+            if (onAcceptPermissionWithInput) {
+              onAcceptPermissionWithInput(perm.toolUseId, {
+                ...perm.input,
+                answers: parsed.answers,
+              })
+              return
+            }
+          } catch {
+            // Fall through to normal accept
           }
-        } catch {
-          // Fall through to normal accept
         }
-      }
 
-      if (response === 'no') {
-        onRejectPermission()
-      } else if (response === 'allow_session') {
-        onAllowToolForSession()
-      } else {
-        onAcceptPermission()
-      }
-    },
+        if (response === 'no') {
+          onRejectPermission(perm.toolUseId)
+        } else if (response === 'allow_session') {
+          onAllowToolForSession(perm.toolUseId, perm.toolName)
+        } else {
+          onAcceptPermission(perm.toolUseId)
+        }
+      },
     [
       sessionId,
-      pendingPermission,
       onAcceptPermission,
       onAcceptPermissionWithInput,
       onRejectPermission,
@@ -129,17 +132,23 @@ export default function ConversationView({
         <MessageBubble key={msg.id} message={msg} />
       ))}
 
-      {pendingPermission && sessionId && (
-        <div ref={permissionCardRef} className="px-3">
-          <PermissionCardWrapper
-            toolName={pendingPermission.toolName}
-            toolUseId={pendingPermission.toolUseId}
-            input={pendingPermission.input}
-            sessionId={sessionId}
-            onRespond={handleRespond}
-          />
-        </div>
-      )}
+      {pendingPermissions.length > 0 &&
+        sessionId &&
+        pendingPermissions.map((perm, idx) => (
+          <div
+            key={perm.toolUseId}
+            ref={idx === pendingPermissions.length - 1 ? permissionCardRef : undefined}
+            className="px-3"
+          >
+            <PermissionCardWrapper
+              toolName={perm.toolName}
+              toolUseId={perm.toolUseId}
+              input={perm.input}
+              sessionId={sessionId}
+              onRespond={makeHandleRespond(perm)}
+            />
+          </div>
+        ))}
 
       {showPlanApproval &&
         onExecutePlanAutoAccept &&

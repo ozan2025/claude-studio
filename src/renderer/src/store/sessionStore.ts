@@ -14,11 +14,11 @@ export interface SessionRuntime {
   messages: ConversationMessage[]
   currentStreamingMessageId: string | null
   totalCostUsd: number
-  pendingPermission: {
+  pendingPermissions: Array<{
     toolUseId: string
     toolName: string
     input: Record<string, unknown>
-  } | null
+  }>
 }
 
 interface SessionStoreState {
@@ -54,7 +54,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       messages: [],
       currentStreamingMessageId: null,
       totalCostUsd: 0,
-      pendingPermission: null,
+      pendingPermissions: [],
     }
     set((state) => {
       const next = new Map(state.sessions)

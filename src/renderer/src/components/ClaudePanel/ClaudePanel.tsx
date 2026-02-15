@@ -4,7 +4,7 @@ import {
   useClaudeCodeStore,
   selectModel,
   selectTotalCost,
-  selectPendingPermission,
+  selectFirstPendingPermission,
   selectPermissionMode,
   selectContextWindowMax,
   selectLastInputTokens,
@@ -54,7 +54,7 @@ export default function ClaudePanel() {
 
   const model = useClaudeCodeStore(selectModel)
   const totalCostUsd = useClaudeCodeStore(selectTotalCost)
-  const pendingPermission = useClaudeCodeStore(selectPendingPermission)
+  const firstPendingPermission = useClaudeCodeStore(selectFirstPendingPermission)
   const permissionMode = useClaudeCodeStore(selectPermissionMode)
   const contextWindowMax = useClaudeCodeStore(selectContextWindowMax)
   const lastInputTokens = useClaudeCodeStore(selectLastInputTokens)
@@ -306,11 +306,20 @@ export default function ClaudePanel() {
     ],
   )
 
-  const handleAutoApprove = useCallback(() => {
-    if (pendingPermission) {
-      allowToolForSession(pendingPermission.toolName)
+  // Keyboard shortcuts and sticky bar operate on the first (oldest) pending permission
+  const handleKeyboardAccept = useCallback(() => {
+    if (firstPendingPermission) acceptPermission(firstPendingPermission.toolUseId)
+  }, [firstPendingPermission, acceptPermission])
+
+  const handleKeyboardReject = useCallback(() => {
+    if (firstPendingPermission) rejectPermission(firstPendingPermission.toolUseId)
+  }, [firstPendingPermission, rejectPermission])
+
+  const handleKeyboardAutoApprove = useCallback(() => {
+    if (firstPendingPermission) {
+      allowToolForSession(firstPendingPermission.toolUseId, firstPendingPermission.toolName)
     }
-  }, [pendingPermission, allowToolForSession])
+  }, [firstPendingPermission, allowToolForSession])
 
   const handleScrollToCard = useCallback(() => {
     // scrollRef is inside ConversationView (first child of conversationRef)
@@ -320,10 +329,10 @@ export default function ClaudePanel() {
 
   // Permission keyboard shortcuts
   usePermissionKeyboard({
-    hasPending: !!pendingPermission,
-    onAccept: acceptPermission,
-    onReject: rejectPermission,
-    onAutoApprove: handleAutoApprove,
+    hasPending: !!firstPendingPermission,
+    onAccept: handleKeyboardAccept,
+    onReject: handleKeyboardReject,
+    onAutoApprove: handleKeyboardAutoApprove,
   })
 
   const clearPlanApproval = useClaudeCodeStore((s) => s.clearPlanApproval)
@@ -453,7 +462,7 @@ export default function ClaudePanel() {
         lastInputTokens: 0,
         showPlanApproval: false,
         origin: 'external',
-        pendingPermission: null,
+        pendingPermissions: [],
       })
       useClaudeCodeStore.setState({
         sessions,
@@ -582,7 +591,7 @@ export default function ClaudePanel() {
             onAcceptPermission={acceptPermission}
             onAcceptPermissionWithInput={acceptPermissionWithInput}
             onRejectPermission={rejectPermission}
-            onAllowToolForSession={handleAutoApprove}
+            onAllowToolForSession={allowToolForSession}
             onPermissionVisibilityChange={setPermissionCardVisible}
             onRestartSession={handleNewSession}
             onExecutePlanAutoAccept={handleExecutePlanAutoAccept}
@@ -593,12 +602,12 @@ export default function ClaudePanel() {
           />
         </ErrorBoundary>
 
-        {pendingPermission && !permissionCardVisible && (
+        {firstPendingPermission && !permissionCardVisible && (
           <StickyPromptBar
-            toolName={pendingPermission.toolName}
+            toolName={firstPendingPermission.toolName}
             visible={true}
-            onAccept={acceptPermission}
-            onReject={rejectPermission}
+            onAccept={handleKeyboardAccept}
+            onReject={handleKeyboardReject}
             onScrollToCard={handleScrollToCard}
           />
         )}
