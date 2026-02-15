@@ -516,6 +516,14 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
           }
           const contentBlocks = msg.content.map(claudeBlockToUI)
 
+          // Each assistant event = one API call. Track input tokens for context bar.
+          // Total context = non-cached + cache-read + cache-created tokens.
+          const assistantInputTokens = msg.usage
+            ? (msg.usage.input_tokens ?? 0) +
+              (msg.usage.cache_read_input_tokens ?? 0) +
+              (msg.usage.cache_creation_input_tokens ?? 0)
+            : 0
+
           set(
             withSession(state, sessionId, (s) => {
               let messages: ConversationMessage[]
@@ -539,6 +547,7 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
               return {
                 ...s,
                 messages,
+                lastInputTokens: assistantInputTokens > 0 ? assistantInputTokens : s.lastInputTokens,
                 currentStreamingMessageId: null,
                 pendingPermission: null,
                 status: 'thinking',
@@ -603,22 +612,16 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
                 }
               : null
 
-          // Extract context window data from modelUsage + usage
+          // Extract context window max from modelUsage (only on result events)
           let contextWindowMax: number | undefined
-          let lastInputTokens: number | undefined
           if (event.modelUsage) {
             const models = Object.values(event.modelUsage)
             if (models.length > 0) {
               contextWindowMax = models[0].contextWindow
             }
           }
-          if (event.usage) {
-            // Total context = non-cached + cache-read + cache-created tokens
-            lastInputTokens =
-              (event.usage.input_tokens ?? 0) +
-              (event.usage.cache_read_input_tokens ?? 0) +
-              (event.usage.cache_creation_input_tokens ?? 0)
-          }
+          // Note: lastInputTokens is tracked per-API-call in the 'assistant' handler,
+          // NOT here — result.usage is cumulative across all API calls in a turn.
 
           set(
             withSession(get(), sessionId, (s) => {
@@ -628,7 +631,6 @@ export const useClaudeCodeStore = create<ClaudeCodeState>((set, get) => ({
                 status: shouldShowPlanApproval ? 'idle' : isError ? 'error' : 'idle',
                 totalCostUsd: event.total_cost_usd,
                 contextWindowMax: contextWindowMax ?? s.contextWindowMax,
-                lastInputTokens: lastInputTokens ?? s.lastInputTokens,
                 showPlanApproval: shouldShowPlanApproval,
                 messages: errMsg ? [...s.messages, errMsg] : s.messages,
               }

@@ -620,6 +620,19 @@ class ClaudeCodeManager {
     // Auto-approve safe meta-tools (user interaction)
     if (ClaudeCodeManager.SAFE_META_TOOLS.has(toolName)) {
       console.log(`[claude-code] auto-approving safe tool: ${toolName}`)
+      // EnterPlanMode: update entry so ExitPlanMode is correctly denied later
+      if (toolName === 'EnterPlanMode') {
+        const entry = this.sessions.get(sessionId)
+        if (entry) {
+          entry.permissionMode = 'plan'
+          if (this.win && !this.win.isDestroyed()) {
+            this.win.webContents.send(IPC.CLAUDE_MODE_CHANGED, {
+              sessionId,
+              permissionMode: 'plan',
+            })
+          }
+        }
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return Promise.resolve({ behavior: 'allow', updatedInput: input } as any)
     }

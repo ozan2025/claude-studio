@@ -20,6 +20,7 @@ export const IPC = {
   // SDK permission flow
   CLAUDE_PERMISSION_REQUEST: 'claude:permission-request',
   CLAUDE_PERMISSION_RESPONSE: 'claude:permission-response',
+  CLAUDE_MODE_CHANGED: 'claude:mode-changed',
 
   // Session management
   CLAUDE_SPAWN_SESSION: 'claude:spawn-session',

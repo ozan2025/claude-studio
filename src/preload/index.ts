@@ -111,6 +111,15 @@ const api = {
       updatedInput,
     }),
 
+  onModeChanged: (callback: (sessionId: string, permissionMode: string) => void) => {
+    const handler = (
+      _: Electron.IpcRendererEvent,
+      data: { sessionId: string; permissionMode: string },
+    ) => callback(data.sessionId, data.permissionMode)
+    ipcRenderer.on(IPC.CLAUDE_MODE_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC.CLAUDE_MODE_CHANGED, handler)
+  },
+
   // Session management
   spawnSession: (projectPath: string): Promise<{ success: boolean; sessionId: string }> =>
     ipcRenderer.invoke(IPC.CLAUDE_SPAWN_SESSION, { projectPath }),

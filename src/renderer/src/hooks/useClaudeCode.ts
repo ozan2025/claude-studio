@@ -85,6 +85,19 @@ export function useClaudeCode() {
     return unsub
   }, [])
 
+  // Listen for SDK-initiated permission mode changes (e.g. EnterPlanMode)
+  useEffect(() => {
+    const unsub = window.api.onModeChanged((sid, mode) => {
+      const store = useClaudeCodeStore.getState()
+      const session = store.sessions.get(sid)
+      if (!session) return
+      const sessions = new Map(store.sessions)
+      sessions.set(sid, { ...session, permissionMode: mode })
+      useClaudeCodeStore.setState({ sessions })
+    })
+    return unsub
+  }, [])
+
   // Flush pending saves on window close
   useEffect(() => {
     const handler = () => flushAllPendingSaves()
