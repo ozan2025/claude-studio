@@ -1,11 +1,23 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createApplicationMenu } from './menu'
 import { registerIpcHandlers } from './ipc-handlers'
 import { setProjectRoot, startWatching, stopWatching } from './file-system'
 import { claudeCodeManager } from './claude-code'
 import { startIpcSocket, stopIpcSocket } from './ipc-socket'
+
+// Isolate userData per project so multiple instances don't corrupt shared LevelDB.
+// Must run before app.whenReady().
+const projectPath =
+  process.env.CLAUDE_STUDIO_PROJECT ||
+  process.argv.find(
+    (arg) => !arg.startsWith('-') && arg !== process.argv[0] && arg !== process.argv[1],
+  ) ||
+  process.cwd()
+const projectHash = createHash('md5').update(projectPath).digest('hex').slice(0, 8)
+app.setPath('userData', join(app.getPath('userData'), `instance-${projectHash}`))
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -52,13 +64,6 @@ app.whenReady().then(() => {
   createApplicationMenu()
   registerIpcHandlers()
 
-  // Determine project root: env var > CLI arg > cwd
-  const projectPath =
-    process.env.CLAUDE_STUDIO_PROJECT ||
-    process.argv.find(
-      (arg) => !arg.startsWith('-') && arg !== process.argv[0] && arg !== process.argv[1],
-    ) ||
-    process.cwd()
   console.log(
     `[claude-studio] project root: ${projectPath} (env=${process.env.CLAUDE_STUDIO_PROJECT ?? 'unset'})`,
   )

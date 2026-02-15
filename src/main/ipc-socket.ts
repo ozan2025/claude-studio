@@ -1,10 +1,19 @@
 import * as net from 'net'
 import * as path from 'path'
 import * as fs from 'fs'
+import * as crypto from 'crypto'
 import { app } from 'electron'
 
 const SOCKET_DIR = path.join(app.getPath('home'), '.claude-studio')
-const SOCKET_PATH = path.join(SOCKET_DIR, 'ipc.sock')
+
+// Per-instance socket so multiple instances don't clobber each other.
+// Uses the userData path (already hashed per project in index.ts).
+const instanceHash = crypto
+  .createHash('md5')
+  .update(app.getPath('userData'))
+  .digest('hex')
+  .slice(0, 8)
+const SOCKET_PATH = path.join(SOCKET_DIR, `ipc-${instanceHash}.sock`)
 
 let server: net.Server | null = null
 
